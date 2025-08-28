@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="pt-br" style="height: 100%">
+<head>
+  <meta charset="utf-8">
+  <title>Variação da Chuva - Fazenda Carnaúba</title>
+  <style>
+    html, body {
+      width: 100%;
+      height: 100%;
+      margin: 0;
+      padding: 0;
+      background: #121212;
+      color: #fff;
+      font-family: sans-serif;
+      display: flex;
+      flex-direction: column;
+    }
+    #controls {
+      display: flex;
+      gap: 1rem;
+      padding: 0.8rem;
+      align-items: center;
+      background: #1e1e1e;
+      flex: 0 0 auto;
+    }
+    #container {
+      flex: 1 1 auto;
+      width: 100%;
+    }
+    label { font-size: 14px; }
+    input { width: 80px; padding: 4px; border-radius: 4px; border: 1px solid #444; background: #222; color: #fff; }
+    button { padding: 6px 10px; border: none; border-radius: 4px; background: #444; color: #fff; cursor: pointer; }
+    button:hover { background: #666; }
+  </style>
+</head>
+<body>
+  <div id="controls">
+    <label>Mín: <input type="number" id="minVar" step="0.1"></label>
+    <label>Máx: <input type="number" id="maxVar" step="0.1"></label>
+    <button id="applyFilter">Aplicar Filtro</button>
+    <button id="resetFilter">Resetar</button>
+  </div>
+
+  <div id="container"></div>
+
+  <script src="https://fastly.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script>
+    const dom = document.getElementById('container');
+    const myChart = echarts.init(dom, 'dark');
+
+    const csvText = `
+ano,total_chuva_mm,dias_chuva_mais_5mm,dias_chuva_mais_10mm
+2013,280.0,14,9
+2014,404.6,18,15
+2015,386.7,16,9
+2016,295.0,17,10
+2017,211.5,11,5
+2018,764.8,28,21
+2019,497.9,25,16
+2020,591.3,19,11
+2021,388.5,19,11
+2022,938.6,37,24
+2023,465.6,18,16
+2024,378.2,21,14
+2025,489.1,27,17
+`;
+
+    const linhas = csvText.trim().split("\n");
+    const dados = linhas.slice(1).map(l => l.split(","));
+
+    const anos = dados.map(r => parseInt(r[0]));
+    const total = dados.map(r => parseFloat(r[1]));
+
+    const allData = [];
+    for (let i = 1; i < anos.length; i++) {
+      if (anos[i] >= 2015 && anos[i] <= 2024) {
+        allData.push({ ano: anos[i], variacao: total[i] - total[i - 1] });
+      }
+    }
+
+    function updateChart(data) {
+      const posData = data.map(d => d.variacao > 0 ? d.variacao : 0);
+      const negData = data.map(d => d.variacao < 0 ? d.variacao : 0);
+
+      const option = {
+        title: { text: 'Variação da chuva acumulada (2015-2024) - Fazenda Carnaúba', left: 'center' },
+        tooltip: { trigger: 'axis', valueFormatter: v => v.toFixed(1) + ' mm' },
+        grid: { top: '15%', left: '5%', right: '5%', bottom: '15%', containLabel: true },
+        xAxis: { type: 'category', data: data.map(d => d.ano), name: 'Ano' },
+        yAxis: { type: 'value', name: 'Δ Chuva (mm)' },
+        dataZoom: [
+          { type: 'slider', show: true, realtime: true, start: 0, end: 100 },
+          { type: 'inside', realtime: true, start: 0, end: 100 }
+        ],
+        series: [
+          {
+            name: 'Variação Positiva',
+            type: 'line',
+            data: posData,
+            smooth: true,
+            areaStyle: { color: 'rgba(76, 175, 80, 0.4)' },
+            lineStyle: { color: '#4caf50', width: 2 },
+            symbol: 'circle',
+            symbolSize: 6
+          },
+          {
+            name: 'Variação Negativa',
+            type: 'line',
+            data: negData,
+            smooth: true,
+            areaStyle: { color: 'rgba(229, 57, 53, 0.4)' },
+            lineStyle: { color: '#e53935', width: 2 },
+            symbol: 'circle',
+            symbolSize: 6
+          }
+        ]
+      };
+      myChart.setOption(option);
+    }
+
+    updateChart(allData);
+
+    document.getElementById("applyFilter").addEventListener("click", () => {
+      const min = parseFloat(document.getElementById("minVar").value);
+      const max = parseFloat(document.getElementById("maxVar").value);
+      const filtered = allData.filter(d => (isNaN(min) || d.variacao >= min) && (isNaN(max) || d.variacao <= max));
+      updateChart(filtered);
+    });
+
+    document.getElementById("resetFilter").addEventListener("click", () => {
+      document.getElementById("minVar").value = "";
+      document.getElementById("maxVar").value = "";
+      updateChart(allData);
+    });
+
+    window.addEventListener('resize', myChart.resize);
+  </script>
+</body>
+</html>
