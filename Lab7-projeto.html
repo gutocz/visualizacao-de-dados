@@ -1,0 +1,182 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>Exportações e Importações do Brasil</title>
+  <script src="https://cdn.jsdelivr.net/npm/echarts@5/dist/echarts.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/echarts/map/js/world.js"></script>
+  <style>
+    body {
+      margin: 0;
+      font-family: Arial, sans-serif;
+      background: #fff;
+    }
+    #container {
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      width: 100%;
+      height: 100vh;
+      position: relative;
+    }
+    #controls {
+      position: absolute;
+      top: 15px;
+      right: 20px;
+    }
+    #titulo {
+      margin: 15px 0 5px 0;
+      font-size: 1.6em;
+      font-weight: bold;
+      text-align: center;
+    }
+    #subtitulo {
+      margin: 0 0 15px 0;
+      font-size: 0.9em;
+      color: #666;
+      text-align: center;
+    }
+    #map, #line {
+      width: 95%;
+      margin: 10px auto;
+      max-width: 1200px;
+    }
+    #map {
+      height: 60vh;
+    }
+    #line {
+      height: 40vh;
+    }
+  </style>
+</head>
+<body>
+<div id="container">
+  <h2 id="titulo">Volume de Exportações do Brasil (Ano 2025)</h2>
+  <p id="subtitulo">Dados do Monitor do Comércio Exterior Brasileiro</p>
+
+  <div id="controls">
+    <select id="tipoSelect">
+      <option value="EXP">Exportações</option>
+      <option value="IMP">Importações</option>
+      <option value="BAL">Balança Comercial</option>
+    </select>
+  </div>
+
+  <div id="map"></div>
+  <div id="line"></div>
+</div>
+
+<script>
+  const mapChart = echarts.init(document.getElementById('map'));
+  const lineChart = echarts.init(document.getElementById('line'));
+
+  let dataset = null;
+  let currentType = 'EXP';
+  let currentYear = '2025';
+  let currentCountry = null;
+
+  const colors = {
+    EXP: '#2ca02c',
+    IMP: '#d62728',
+    BAL: '#1f77b4'
+  };
+
+  const mapColors = {
+    EXP: ['#e5f5e0', '#31a354'],
+    IMP: ['#fee0d2', '#de2d26'],
+    BAL: ['#deebf7', '#3182bd']
+  };
+
+  async function loadData() {
+    dataset = await fetch('BR-exportacoes_importacoes_2025.json').then(res => res.json());
+    updateMap();
+    updateLine();
+  }
+
+  function updateMap() {
+    const yearData = dataset[currentType][currentYear];
+    const mapData = yearData.map(d => ({
+      name: d.name,
+      value: d.us_value / 1e9
+    }));
+
+    mapChart.setOption({
+      tooltip: {
+        trigger: 'item',
+        formatter: p => {
+          if (!p.value) return `${p.name}: sem dados`;
+          return `${p.name}<br/>US$ ${p.value.toFixed(2)} bi`;
+        }
+      },
+      visualMap: {
+        min: Math.min(...mapData.map(d => d.value || 0)),
+        max: Math.max(...mapData.map(d => d.value || 0)),
+        text: ['Alto', 'Baixo'],
+        realtime: true,
+        calculable: true,
+        left: 'right',
+        inRange: { color: mapColors[currentType] }
+      },
+      series: [{
+        name: currentType,
+        type: 'map',
+        map: 'world',
+        roam: true,
+        aspectScale: 1.2,
+        emphasis: { label: { show: false } },
+        data: mapData
+      }]
+    });
+
+    mapChart.off('click');
+    mapChart.on('click', params => {
+      currentCountry = params.name;
+      updateLine();
+    });
+
+    document.getElementById('titulo').textContent =
+      `Volume de ${currentType === 'EXP' ? 'Exportações' : currentType === 'IMP' ? 'Importações' : 'Balança Comercial'} do Brasil (Ano ${currentYear})`;
+  }
+
+  function updateLine() {
+    const years = Object.keys(dataset[currentType]).sort();
+    const exp = years.map(y => {
+      const entry = dataset.EXP[y].find(d => d.name === (currentCountry || 'World Total'));
+      return entry ? entry.us_value / 1e9 : 0;
+    });
+    const imp = years.map(y => {
+      const entry = dataset.IMP[y].find(d => d.name === (currentCountry || 'World Total'));
+      return entry ? entry.us_value / 1e9 : 0;
+    });
+    const bal = years.map((_, i) => exp[i] - imp[i]);
+
+    lineChart.setOption({
+      title: {
+        text: currentCountry ? `Série histórica: ${currentCountry}` : 'Série histórica: Total',
+        left: 'center'
+      },
+      tooltip: { trigger: 'axis' },
+      legend: { data: ['Exportações', 'Importações', 'Balança Comercial'], top: 25 },
+      xAxis: { type: 'category', data: years },
+      yAxis: { type: 'value', name: 'US$ Bi' },
+      dataZoom: [
+        { type: 'slider', start: 50, end: 100 },
+        { type: 'inside' }
+      ],
+      series: [
+        { name: 'Exportações', type: 'line', data: exp, smooth: true, itemStyle: { color: colors.EXP } },
+        { name: 'Importações', type: 'line', data: imp, smooth: true, itemStyle: { color: colors.IMP } },
+        { name: 'Balança Comercial', type: 'line', data: bal, smooth: true, itemStyle: { color: colors.BAL } }
+      ]
+    });
+  }
+
+  document.getElementById('tipoSelect').addEventListener('change', e => {
+    currentType = e.target.value;
+    updateMap();
+  });
+
+  loadData();
+</script>
+</body>
+</html>
